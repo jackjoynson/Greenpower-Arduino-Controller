@@ -12,21 +12,19 @@
 //*****************CHANGE LOG**********************
 //Name          Date        Comments
 //Jack Joynson  03/08/16    Calibrated to Discharge rig
-//Tom Lawson    11/07/17    added air temp sensor
+//Tom Lawson    19/06/2017  Calibrated to DC load
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#include <Wire.h>
 
 const int PWMLowerLimit = 100; //Minimum PWM Duty (max is 255)
 const double PWMStep = 0.5; //Amount by which the PWM Duty is increased or decreased by
 
 double currentLimit = 65.0; //Maximum current target
 
-const double CurrentCalibration_m = (0.1536/0.8777)*0.909091;
-const double CurrentCalibration_c = +0.1682;
-const double VoltageCalibration_m = 1.004*(0.03117207/0.9611)/1.043076923;
-const double VoltageCalibration_c = 0;
+const double CurrentCalibration_m = 0.183343777; // was 0.148004696; 
+const double CurrentCalibration_c = -6.6; //was 2.0715;
+const double VoltageCalibration_m = 0.030706687; //was 1.004*(0.03117207/0.9611)/1.043076923;
+const double VoltageCalibration_c = 0.1045;//was 0.0664; //was 0
 const double CurrentNoiseIgnoreLimit = 11.0;
 const double PWMDutyCalibration = 0.392156;
 
@@ -73,18 +71,6 @@ unsigned long MotorEncoderPrevTime;
 unsigned long MotorEncoderCurrentTime;
 unsigned long MotorTimeElapsed;
 
-/////////////////////////////////////////////////////////////////////////////////////
-//stuff for AD7415 temp sensor, uses i2C - base address is 1001 010x
-int8_t AD7415_ADDR_W = 0x4a;//0x94; //write address of chip
-int8_t AD7415_ADDR_R = 0x4a;//0x95; //read address of chip
-int8_t AD7415_ADDR_PTR = 0x00; //pointer to address register (or with a select to pick target reg)
-int8_t AD7415_SELECT_TEMP = 0x00; //lsbs selects temp register
-int8_t AD7415_SELECT_CONFIG = 0x01; //lsb select config register
-int8_t AD7415_SELECT_THIGH = 0x02; //lsb selects Thigh
-int8_t AD7415_SELECT_TLOW = 0x03; //lsb selects Tlow
-int8_t AD7415_DATA_SIZE = 2; //number of bytes to read
-
-double Temperature =  0;
 
 
 void setup()
@@ -199,36 +185,8 @@ void ReadSensors()
 	EnergyUsagePrevTime = currTime;
 
 	voltage = (analogRead(VoltagePin) * VoltageCalibration_m) + VoltageCalibration_c;
-   Temperature = AD7415();
 }
 
-double AD7415(void)
-{
-double temperature = 0;
-int32_t temp = 0; //temporary register 
-double fraction = 0; //fractional part
-  Wire.beginTransmission(AD7415_ADDR_W); //write to device address
-  Wire.write(byte(AD7415_SELECT_TEMP | AD7415_SELECT_CONFIG));    //write to config register
-  Wire.write(byte(0x04));     //write to "one shot" register to start a measurement
-  Wire.endTransmission();
-  delay(5);           //wait 1ms for reading to happen (is about 1us)
-  //demand reading
-  Wire.beginTransmission(AD7415_ADDR_R); //write to device address
-  Wire.write(byte(AD7415_ADDR_PTR | AD7415_SELECT_TEMP));    //write to temp register
-  Wire.endTransmission();
-
-  Wire.requestFrom(AD7415_ADDR_R, AD7415_DATA_SIZE); //ger reading
-  
-  if (2 <= Wire.available())
-  { // if two bytes were received
-  temp = Wire.read();  // receive high byte (overwrites previous reading)
-  temp = temp << 8;    // shift high byte to be high 8 bits
-  temp |= Wire.read(); // receive low byte as lower 8 bits
-  }
-  temp = temp >> 6; //shift it right 6 to remove the duff numbers (NA) from the lsb register)
-  temperature = temp/4;
-  return temperature; //value is only accurate to +/-2degreesC
-}
 
 void SetTick()
 {
@@ -267,12 +225,14 @@ void SerialReceive()
 		case 'g':
 		case 'G':
 			go = true;
+      //Serial.write("going");
 			break;
 		case 'o':
 		case 'O':
 			go = false;
 			break;
 		default:
+      //Serial.write("unknown");
 			Serial.flush();
 		}
 	}
@@ -314,7 +274,7 @@ void SerialTransmit()
 	Serial.print(",");
 	Serial.print(PWMDuty*PWMDutyCalibration);
 	Serial.print(",");
-	Serial.print(Temperature);  //BATTTEMP1
+	Serial.print(1.00);  //BATTTEMP1
 	Serial.print(",");
 	Serial.print(1.00);  //BATTTEMP2
 	Serial.print(",");
